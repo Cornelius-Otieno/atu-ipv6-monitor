@@ -1,0 +1,103 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/atu_ipv6_monitor/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Country {
+  cc            String   @id @db.VarChar(2)
+  name          String   @db.VarChar(100)
+  subRegion     String?  @map("sub_region") @db.VarChar(50)
+  population    BigInt?  @default(0)
+  internetUsers BigInt?  @default(0) @map("internet_users")
+  isTestbed     Boolean  @default(false) @map("is_testbed")
+  testbedNotes  String?  @map("testbed_notes")
+
+  metrics            CountryMetric[]
+  afrinicAllocations AfrinicAllocation[]
+  cloudflareMetrics  CloudflareMetric[]
+  asnMetrics         AsnMetric[]
+
+  @@map("countries")
+}
+
+model CountryMetric {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @db.Date
+  cc          String   @db.VarChar(2)
+  preferredPc Decimal? @map("preferred_pc") @db.Decimal(6, 3)
+  capablePc   Decimal? @map("capable_pc") @db.Decimal(6, 3)
+  sampleN     Int?     @map("sample_n")
+  source      String   @default("APNIC") @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  country Country @relation(fields: [cc], references: [cc])
+
+  @@unique([date, cc])
+  @@index([cc])
+  @@index([date])
+  @@map("country_metrics")
+}
+
+model AfrinicAllocation {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @db.Date
+  cc              String   @db.VarChar(2)
+  allocationCount Int      @default(0) @map("allocation_count")
+  total32s        Decimal  @default(0) @map("total_32s") @db.Decimal(12, 4)
+  source          String   @default("AFRINIC") @db.VarChar(50)
+
+  country Country @relation(fields: [cc], references: [cc])
+
+  @@unique([date, cc])
+  @@index([cc])
+  @@map("afrinic_allocations")
+}
+
+model CloudflareMetric {
+  id             Int      @id @default(autoincrement())
+  date           DateTime @db.Date
+  cc             String   @db.VarChar(2)
+  ipv6TrafficPct Decimal? @map("ipv6_traffic_pct") @db.Decimal(6, 3)
+  source         String   @default("Cloudflare") @db.VarChar(50)
+
+  country Country @relation(fields: [cc], references: [cc])
+
+  @@unique([date, cc])
+  @@index([cc])
+  @@map("cloudflare_metrics")
+}
+
+model AsnMetric {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @db.Date
+  cc          String   @db.VarChar(2)
+  asn         Int
+  asnName     String?  @map("asn_name") @db.VarChar(200)
+  preferredPc Decimal? @map("preferred_pc") @db.Decimal(6, 3)
+  capablePc   Decimal? @map("capable_pc") @db.Decimal(6, 3)
+  source      String   @default("APNIC") @db.VarChar(50)
+
+  country Country @relation(fields: [cc], references: [cc])
+
+  @@unique([date, cc, asn])
+  @@index([cc])
+  @@index([date])
+  @@map("asn_metrics")
+}
+
+model EtlLog {
+  id               Int      @id @default(autoincrement())
+  runAt            DateTime @default(now()) @map("run_at")
+  source           String?  @db.VarChar(50)
+  status           String?  @db.VarChar(20)
+  countriesUpdated Int?     @map("countries_updated")
+  message          String?
+
+  @@map("etl_log")
+}
