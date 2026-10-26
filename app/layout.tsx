@@ -17,8 +17,9 @@ export const metadata = {
   description: 'Tracking IPv6 adoption across the African continent — powered by APNIC Labs, AFRINIC, and Cloudflare Radar data.',
   metadataBase: new URL(process.env.NEXTAUTH_URL ?? 'http://localhost:3000'),
   icons: {
-    icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
+    icon: '/atu-logo.png',
+    shortcut: '/atu-logo.png',
+    apple: '/atu-logo.png',
   },
   openGraph: {
     title: 'ATU Africa IPv6 Monitor',
