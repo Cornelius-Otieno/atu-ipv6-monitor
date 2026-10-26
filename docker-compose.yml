@@ -27,6 +27,7 @@ services:
       DATABASE_URL: postgresql://atu_user:${POSTGRES_PASSWORD}@db:5432/atu_ipv6?connect_timeout=15
       ETL_SECRET: ${ETL_SECRET:?Set ETL_SECRET in .env}
       CRON_SECRET: ${CRON_SECRET:?Set CRON_SECRET in .env}
+      INTERNAL_APP_URL: http://127.0.0.1:3000
       CLOUDFLARE_RADAR_TOKEN: ${CLOUDFLARE_RADAR_TOKEN:-}
       NEXT_PUBLIC_APP_NAME: ATU Africa IPv6 Monitor
       NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL in .env}

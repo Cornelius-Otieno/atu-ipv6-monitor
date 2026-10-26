@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const baseUrl = req.nextUrl.origin;
+    const baseUrl = process.env.INTERNAL_APP_URL ?? req.nextUrl.origin;
     const etlSecret = process.env.ETL_SECRET ?? '';
 
     const r = await fetch(`${baseUrl}/api/etl/run-all`, {
