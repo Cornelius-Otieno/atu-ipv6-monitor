@@ -3,10 +3,10 @@ const path = require('path');
 
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
-  output: process.env.NEXT_OUTPUT_MODE,
+  output: process.env.NEXT_OUTPUT_MODE || 'standalone',
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
-  outputFileTracingRoot: process.env.NEXT_OUTPUT_MODE ? path.join(__dirname, '../') : '/',
+  outputFileTracingRoot: __dirname,
   typescript: {
     ignoreBuildErrors: true,
   },
