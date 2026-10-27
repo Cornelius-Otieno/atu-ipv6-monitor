@@ -1,6 +1,5 @@
 /**
- * Backfill script: fetches APNIC data for all 54 African countries
- * for the current day. Run once to seed initial data.
+ * Backfill script: fetches the latest APNIC 30-day values for all 54 countries.
  *
  * Usage: cd nextjs_space && yarn tsx --require dotenv/config scripts/backfill.ts
  */
@@ -16,8 +15,6 @@ const AFRICAN_CCS = [
 ];
 
 async function main() {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
   let updated = 0;
   let errors = 0;
 
@@ -40,17 +37,29 @@ async function main() {
         continue;
       }
 
-      // Last row = most recent data. Fields are nested under 'raw'
+      // APNIC's default chart interval is 30 days.
       const row = rows[rows.length - 1];
-      const raw = row?.raw ?? row;
-      const preferredPc = parseFloat(raw?.preferred_pc ?? raw?.pref_percent ?? '0') || 0;
-      const capablePc = parseFloat(raw?.capable_pc ?? raw?.able_percent ?? '0') || 0;
-      const sampleN = parseInt(raw?.seen ?? raw?.n ?? '0', 10) || 0;
+      const interval = row?.['30'];
+      if (!row?.date || !interval) {
+        console.error(`  ${cc}: latest row has no date or 30-day values`);
+        errors++;
+        continue;
+      }
+
+      const observationDate = new Date(`${row.date}T00:00:00.000Z`);
+      if (Number.isNaN(observationDate.getTime())) {
+        console.error(`  ${cc}: invalid observation date ${row.date}`);
+        errors++;
+        continue;
+      }
+      const preferredPc = Number(interval.preferred_pc ?? 0);
+      const capablePc = Number(interval.capable_pc ?? 0);
+      const sampleN = Math.round(Number(interval.seen ?? 0));
 
       await prisma.countryMetric.upsert({
-        where: { date_cc: { date: today, cc } },
+        where: { date_cc: { date: observationDate, cc } },
         update: { preferredPc, capablePc, sampleN },
-        create: { date: today, cc, preferredPc, capablePc, sampleN, source: 'APNIC' },
+        create: { date: observationDate, cc, preferredPc, capablePc, sampleN, source: 'APNIC' },
       });
       updated++;
       console.log(`  ${cc}: ${preferredPc}% preferred, ${capablePc}% capable`);

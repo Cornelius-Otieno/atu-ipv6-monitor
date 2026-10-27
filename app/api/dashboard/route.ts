@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { APNIC_AFRICA, APNIC_REGIONS, fetchApnicCountrySummaries, fetchApnicRegionSeries, fetchApnicRegionSummaries } from '@/lib/apnic';
 
 export async function GET() {
   try {
@@ -13,9 +14,21 @@ export async function GET() {
     const currentDate = latestDate?.date ?? new Date();
 
     // KPIs
-    const currentMetrics = await prisma.countryMetric.findMany({
+    const storedCurrentMetrics = await prisma.countryMetric.findMany({
       where: { date: currentDate },
       include: { country: true },
+    });
+    const apnicCountrySummaries = await fetchApnicCountrySummaries();
+    const currentMetrics = storedCurrentMetrics.map((metric: any) => {
+      const apnic = apnicCountrySummaries[metric.cc];
+      return {
+        ...metric,
+        preferredPc: apnic?.preferredPc ?? Number(metric.preferredPc ?? 0),
+        capablePc: apnic?.capablePc ?? Number(metric.capablePc ?? 0),
+        sampleN: apnic?.sampleN ?? metric.sampleN ?? 0,
+        apnicWeight: apnic?.weight ?? null,
+        apnicWeightedSamples: apnic?.weightedSamples ?? null,
+      };
     });
 
     const thirtyDaysAgo = new Date(currentDate);
@@ -28,10 +41,10 @@ export async function GET() {
     const oldMap = new Map(oldMetrics.map((m: any) => [m.cc, Number(m.preferredPc ?? 0)]));
 
     const total = currentMetrics?.length ?? 0;
-    const avgPreferred = total > 0
+    const countryAvgPreferred = total > 0
       ? currentMetrics.reduce((s: number, m: any) => s + Number(m.preferredPc ?? 0), 0) / total
       : 0;
-    const avgCapable = total > 0
+    const countryAvgCapable = total > 0
       ? currentMetrics.reduce((s: number, m: any) => s + Number(m.capablePc ?? 0), 0) / total
       : 0;
     const above10 = currentMetrics.filter((m: any) => Number(m.preferredPc ?? 0) >= 10).length;
@@ -42,41 +55,26 @@ export async function GET() {
     });
     const avgChange = changes?.length > 0 ? changes.reduce((a: number, b: number) => a + b, 0) / changes.length : 0;
 
-    // Time series for area chart
-    const allMetrics = await prisma.countryMetric.findMany({
-      orderBy: { date: 'asc' },
-    });
-
-    const dateMap = new Map<string, { sum: number; count: number }>(); 
-    for (const m of allMetrics) {
-      const d = m.date?.toISOString?.()?.split?.('T')?.[0] ?? '';
-      if (!dateMap.has(d)) dateMap.set(d, { sum: 0, count: 0 });
-      const entry = dateMap.get(d)!;
-      entry.sum += Number(m.preferredPc ?? 0);
-      entry.count++;
-    }
-
-    // NOTE: the viz kit's `percent` formatter multiplies by 100, so all
-    // percent-formatted values are emitted as fractions (actual % / 100).
-    const trendData = Array.from(dateMap.entries()).map(([date, v]: [string, any]) => ({
-      date,
-      avg_preferred: v.count > 0 ? (v.sum / v.count) / 100 : 0,
+    // Use APNIC's own continent and sub-region aggregates rather than country means.
+    const [apnicRegionSeries, apnicRegionSummaries] = await Promise.all([
+      fetchApnicRegionSeries(),
+      fetchApnicRegionSummaries(),
+    ]);
+    const africaSeries = apnicRegionSeries[APNIC_AFRICA.name] ?? [];
+    const africaLatest = africaSeries.at(-1);
+    const africaSummary = apnicRegionSummaries[APNIC_AFRICA.name];
+    const avgPreferred = africaSummary?.preferredPc ?? africaLatest?.preferredPc ?? countryAvgPreferred;
+    const avgCapable = africaSummary?.capablePc ?? africaLatest?.capablePc ?? countryAvgCapable;
+    const trendData = africaSeries.map((point) => ({
+      date: point.date,
+      avg_preferred: point.preferredPc / 100,
     }));
-
-    // Regional breakdown for bar chart
-    const regionMap = new Map<string, { sum: number; count: number }>();
-    for (const m of currentMetrics) {
-      const region = m.country?.subRegion ?? 'Unknown';
-      if (!regionMap.has(region)) regionMap.set(region, { sum: 0, count: 0 });
-      const entry = regionMap.get(region)!;
-      entry.sum += Number(m.preferredPc ?? 0);
-      entry.count++;
-    }
-
-    const regionData = Array.from(regionMap.entries()).map(([region, v]: [string, any]) => ({
-      region,
-      avg_preferred: v.count > 0 ? ((v.sum / v.count) / 100) : 0,
-    })).sort((a: any, b: any) => (b?.avg_preferred ?? 0) - (a?.avg_preferred ?? 0));
+    const regionData = APNIC_REGIONS.flatMap(({ name }) => {
+      const latest = apnicRegionSeries[name]?.at(-1);
+      const summary = apnicRegionSummaries[name];
+      const preferredPc = summary?.preferredPc ?? latest?.preferredPc;
+      return preferredPc == null ? [] : [{ region: name, avg_preferred: preferredPc / 100 }];
+    }).sort((a, b) => b.avg_preferred - a.avg_preferred);
 
     // Top/bottom countries for lollipop
     const ranked = currentMetrics
@@ -121,6 +119,9 @@ export async function GET() {
         testbed: m.country?.isTestbed ? 'Testbed' : '',
         preferred: Number(m.preferredPc ?? 0) / 100,
         capable: Number(m.capablePc ?? 0) / 100,
+        samples: m.sampleN ?? 0,
+        weight: m.apnicWeight,
+        weighted_samples: m.apnicWeightedSamples,
         alloc_32s: allocMap.get(m.cc) ?? 0,
         change_30d: old !== undefined ? ((Number(m.preferredPc ?? 0) - old) / 100) : 0,
       };

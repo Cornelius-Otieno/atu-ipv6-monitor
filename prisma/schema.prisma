@@ -32,6 +32,7 @@ model CountryMetric {
   preferredPc Decimal? @map("preferred_pc") @db.Decimal(6, 3)
   capablePc   Decimal? @map("capable_pc") @db.Decimal(6, 3)
   sampleN     Int?     @map("sample_n")
+  dailySampleN Int?    @map("daily_sample_n")
   source      String   @default("APNIC") @db.VarChar(50)
   createdAt   DateTime @default(now()) @map("created_at")
 

@@ -2,12 +2,14 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { fetchApnicCountrySummaries } from '@/lib/apnic';
 
 export async function GET() {
   try {
     const testbedCountries = await prisma.country.findMany({
       where: { isTestbed: true },
     });
+    const apnicCountrySummaries = await fetchApnicCountrySummaries();
 
     const results = [];
     for (const c of testbedCountries) {
@@ -46,15 +48,16 @@ export async function GET() {
         where: { cc: c.cc, date: { lte: ninetyDaysAgo } },
         orderBy: { date: 'desc' },
       });
+      const apnic = apnicCountrySummaries[c.cc];
 
       results.push({
         cc: c.cc,
         name: c.name,
         subRegion: c.subRegion,
         testbedNotes: c.testbedNotes,
-        preferredPc: Number(latest?.preferredPc ?? 0),
-        capablePc: Number(latest?.capablePc ?? 0),
-        sampleN: latest?.sampleN ?? 0,
+        preferredPc: apnic?.preferredPc ?? Number(latest?.preferredPc ?? 0),
+        capablePc: apnic?.capablePc ?? Number(latest?.capablePc ?? 0),
+        sampleN: apnic?.sampleN ?? latest?.sampleN ?? 0,
         allocations32s: alloc ? Number(alloc.total32s) : 0,
         cloudflareTrafficPct: cf ? Number(cf.ipv6TrafficPct) : null,
         change30d: oldMetric ? Number(latest?.preferredPc ?? 0) - Number(oldMetric.preferredPc ?? 0) : null,

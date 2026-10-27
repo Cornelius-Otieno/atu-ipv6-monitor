@@ -91,7 +91,7 @@ export function AfricaMapSection() {
         {/* Map */}
         <div className="bg-card rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-lg font-semibold">IPv6 Preferred % by Country</h2>
+            <h2 className="font-display text-lg font-semibold">IPv6 Preferred % by Country · APNIC 30-day</h2>
             {data?.lastUpdated && (
               <span className="text-xs text-muted-foreground">
                 Last updated: {new Date(data.lastUpdated).toLocaleDateString('en-US', { timeZone: 'UTC' })}

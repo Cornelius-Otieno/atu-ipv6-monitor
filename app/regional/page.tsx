@@ -7,28 +7,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SUB_REGIONS } from '@/lib/countries';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
 const RegionalBarChart = dynamic(() => import('@/components/regional-bar-chart'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[300px] w-full" />,
+});
+const CountryTimeSeries = dynamic(() => import('@/components/country-time-series'), {
   ssr: false,
   loading: () => <Skeleton className="h-[300px] w-full" />,
 });
 
 interface RegionData {
   name: string;
-  avgPreferred: number;
-  avgCapable: number;
+  avgPreferred: number | null;
+  avgCapable: number | null;
   countryCount: number;
   countries: Array<{ cc: string; name: string; isTestbed: boolean; preferredPc: number; capablePc: number }>;
 }
 
 export default function RegionalPage() {
   const [regions, setRegions] = useState<RegionData[]>([]);
+  const [timeSeries, setTimeSeries] = useState<Record<string, Array<{ date: string; preferredPc: number; capablePc: number; dailySampleN?: number }>>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/regional')
       .then((r: any) => r.json())
-      .then((d: any) => setRegions(d?.regions ?? []))
+      .then((d: any) => {
+        setRegions(d?.regions ?? []);
+        setTimeSeries(d?.timeSeries ?? {});
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -63,14 +72,14 @@ export default function RegionalPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card>
                   <CardContent className="pt-4 text-center">
-                    <p className="text-xs text-muted-foreground">Avg Preferred %</p>
-                    <p className="font-mono text-2xl font-bold text-[#157A3C]">{r.avgPreferred?.toFixed?.(2)}%</p>
+                    <p className="text-xs text-muted-foreground">APNIC 30-day Preferred</p>
+                    <p className="font-mono text-2xl font-bold text-[#157A3C]">{r.avgPreferred?.toFixed?.(2) ?? 'N/A'}%</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="pt-4 text-center">
-                    <p className="text-xs text-muted-foreground">Avg Capable %</p>
-                    <p className="font-mono text-2xl font-bold text-[#009B4E]">{r.avgCapable?.toFixed?.(2)}%</p>
+                    <p className="text-xs text-muted-foreground">APNIC 30-day Capable</p>
+                    <p className="font-mono text-2xl font-bold text-[#009B4E]">{r.avgCapable?.toFixed?.(2) ?? 'N/A'}%</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -80,6 +89,15 @@ export default function RegionalPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="text-lg">IPv6 use over time · APNIC 30-day interval</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CountryTimeSeries timeSeries={timeSeries[r.name] ?? []} />
+                </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader>
@@ -106,10 +124,10 @@ export default function RegionalPage() {
                         {(r.countries ?? []).map((c: any) => (
                           <tr key={c.cc} className="border-b hover:bg-muted/50">
                             <td className="py-2 px-2">
-                              {c.name}
-                              {c.isTestbed && (
-                                <span className="ml-1 text-xs bg-[#157A3C]/10 text-[#157A3C] px-1 rounded">🔬</span>
-                              )}
+                              <Link className="hover:underline" href={`/country/${c.cc.toLowerCase()}`}>
+                                {c.name}
+                              </Link>
+                              {c.isTestbed && <span className="ml-1 text-xs bg-[#157A3C]/10 text-[#157A3C] px-1 rounded">🔬</span>}
                             </td>
                             <td className="text-right py-2 px-2 font-mono">{c.preferredPc?.toFixed?.(2)}%</td>
                             <td className="text-right py-2 px-2 font-mono">{c.capablePc?.toFixed?.(2)}%</td>

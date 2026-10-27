@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { fetchApnicCountrySummaries } from '@/lib/apnic';
 
 export async function GET(
   _req: NextRequest,
@@ -43,6 +44,7 @@ export async function GET(
     });
 
     const latest = metrics?.[metrics.length - 1] ?? null;
+    const apnicSnapshot = (await fetchApnicCountrySummaries())[upperCc];
     const serialized = {
       ...country,
       population: country.population ? String(country.population) : null,
@@ -52,16 +54,17 @@ export async function GET(
     return NextResponse.json({
       country: serialized,
       latest: latest ? {
-        preferredPc: Number(latest.preferredPc ?? 0),
-        capablePc: Number(latest.capablePc ?? 0),
-        sampleN: latest.sampleN ?? 0,
+        preferredPc: apnicSnapshot?.preferredPc ?? Number(latest.preferredPc ?? 0),
+        capablePc: apnicSnapshot?.capablePc ?? Number(latest.capablePc ?? 0),
+        sampleN: apnicSnapshot?.sampleN ?? latest.sampleN ?? 0,
+        dailySampleN: latest.dailySampleN ?? 0,
         date: latest.date?.toISOString?.() ?? null,
       } : null,
       timeSeries: metrics.map((m: any) => ({
         date: m.date?.toISOString?.()?.split?.('T')?.[0] ?? '',
         preferredPc: Number(m.preferredPc ?? 0),
         capablePc: Number(m.capablePc ?? 0),
-        sampleN: m.sampleN ?? 0,
+        dailySampleN: m.dailySampleN ?? 0,
       })),
       allocation: alloc ? {
         allocationCount: alloc.allocationCount,

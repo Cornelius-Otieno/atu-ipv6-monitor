@@ -38,7 +38,7 @@ export default function CountryDetailPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_: any, i: number) => <Skeleton key={i} className="h-24" />)}
         </div>
-        <Skeleton className="h-[300px] w-full" />
+        <Skeleton className="h-[480px] w-full" />
       </div>
     );
   }
@@ -83,16 +83,16 @@ export default function CountryDetailPage() {
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <MetricCard icon={Globe} label="Preferred %" value={latest?.preferredPc} suffix="%" color="text-[#157A3C]" />
-        <MetricCard icon={Zap} label="Capable %" value={latest?.capablePc} suffix="%" color="text-[#009B4E]" />
+        <MetricCard icon={Globe} label="Preferred · APNIC 30-day" value={latest?.preferredPc} suffix="%" color="text-[#157A3C]" />
+        <MetricCard icon={Zap} label="Capable · APNIC 30-day" value={latest?.capablePc} suffix="%" color="text-[#009B4E]" />
         <MetricCard icon={Database} label="Allocations" value={data?.allocation?.total32s} suffix=" /32s" color="text-[#F5A623]" />
-        <MetricCard icon={Users} label="Sample Size" value={latest?.sampleN} suffix="" color="text-foreground" />
+        <MetricCard icon={Users} label="30-day Samples" value={latest?.sampleN} suffix="" color="text-foreground" />
       </div>
 
       {/* Time series chart */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-lg">IPv6 Adoption Over Time</CardTitle>
+          <CardTitle className="text-lg">IPv6 Adoption Over Time · APNIC 30-day interval</CardTitle>
         </CardHeader>
         <CardContent>
           <CountryTimeSeries timeSeries={data?.timeSeries ?? []} />

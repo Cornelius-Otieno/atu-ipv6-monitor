@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { APNIC_REGIONS, fetchApnicCountrySummaries, fetchApnicRegionSeries, fetchApnicRegionSummaries } from '@/lib/apnic';
 
 export async function GET() {
   try {
@@ -20,62 +21,42 @@ export async function GET() {
       where: { date: currentDate },
       include: { country: true },
     });
+    const apnicCountrySummaries = await fetchApnicCountrySummaries();
 
-    // Group by sub-region
+    // Group country rows by the local sub-region labels.
     const regionMap = new Map<string, any[]>();
     for (const m of metrics) {
       const region = m.country?.subRegion ?? 'Unknown';
       if (!regionMap.has(region)) regionMap.set(region, []);
+      const apnic = apnicCountrySummaries[m.cc];
       regionMap.get(region)?.push({
         cc: m.cc,
         name: m.country?.name ?? m.cc,
         isTestbed: m.country?.isTestbed ?? false,
-        preferredPc: Number(m.preferredPc ?? 0),
-        capablePc: Number(m.capablePc ?? 0),
+        preferredPc: apnic?.preferredPc ?? Number(m.preferredPc ?? 0),
+        capablePc: apnic?.capablePc ?? Number(m.capablePc ?? 0),
       });
     }
 
-    const regions = Array.from(regionMap.entries()).map(([name, countries]: [string, any[]]) => {
-      const avgPreferred = countries?.length > 0
-        ? countries.reduce((s: number, c: any) => s + (c?.preferredPc ?? 0), 0) / countries.length
-        : 0;
-      const avgCapable = countries?.length > 0
-        ? countries.reduce((s: number, c: any) => s + (c?.capablePc ?? 0), 0) / countries.length
-        : 0;
+    const [timeSeries, summaries] = await Promise.all([
+      fetchApnicRegionSeries(),
+      fetchApnicRegionSummaries(),
+    ]);
+    const regions = APNIC_REGIONS.map(({ name }) => {
+      const countries = regionMap.get(name) ?? [];
+      const latest = timeSeries[name]?.at(-1);
+      const summary = summaries[name];
       return {
         name,
-        avgPreferred: Math.round(avgPreferred * 100) / 100,
-        avgCapable: Math.round(avgCapable * 100) / 100,
+        avgPreferred: summary?.preferredPc ?? latest?.preferredPc ?? null,
+        avgCapable: summary?.capablePc ?? latest?.capablePc ?? null,
+        samples: summary?.sampleN ?? null,
+        weight: summary?.weight ?? null,
+        weightedSamples: summary?.weightedSamples ?? null,
         countryCount: countries.length,
         countries: countries.sort((a: any, b: any) => (b?.preferredPc ?? 0) - (a?.preferredPc ?? 0)),
       };
-    }).sort((a: any, b: any) => (b?.avgPreferred ?? 0) - (a?.avgPreferred ?? 0));
-
-    // Time series by region
-    const allMetrics = await prisma.countryMetric.findMany({
-      include: { country: true },
-      orderBy: { date: 'asc' },
-    });
-
-    const timeSeriesMap = new Map<string, Map<string, { sum: number; count: number }>>(); // region -> date -> avg
-    for (const m of allMetrics) {
-      const region = m.country?.subRegion ?? 'Unknown';
-      const dateStr = m.date?.toISOString?.()?.split?.('T')?.[0] ?? '';
-      if (!timeSeriesMap.has(region)) timeSeriesMap.set(region, new Map());
-      const regionTs = timeSeriesMap.get(region)!;
-      if (!regionTs.has(dateStr)) regionTs.set(dateStr, { sum: 0, count: 0 });
-      const entry = regionTs.get(dateStr)!;
-      entry.sum += Number(m.preferredPc ?? 0);
-      entry.count++;
-    }
-
-    const timeSeries: Record<string, any[]> = {};
-    for (const [region, dateMap] of timeSeriesMap) {
-      timeSeries[region] = Array.from(dateMap.entries()).map(([date, v]: [string, any]) => ({
-        date,
-        avgPreferred: v.count > 0 ? Math.round((v.sum / v.count) * 100) / 100 : 0,
-      }));
-    }
+    }).sort((a, b) => (b.avgPreferred ?? 0) - (a.avgPreferred ?? 0));
 
     return NextResponse.json({ regions, timeSeries, lastUpdated: currentDate.toISOString() });
   } catch (e: any) {

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { APNIC_AFRICA, fetchApnicCountrySummaries, fetchApnicRegionSeries, fetchApnicRegionSummaries } from '@/lib/apnic';
 
 export async function GET() {
   try {
@@ -23,6 +24,7 @@ export async function GET() {
       include: { country: true },
       orderBy: { preferredPc: 'desc' },
     });
+    const apnicCountrySummaries = await fetchApnicCountrySummaries();
 
     // Get 30 days ago metrics for change calculation
     const thirtyDaysAgo = new Date(currentDate);
@@ -55,16 +57,21 @@ export async function GET() {
       const old = oldMap.get(m.cc);
       const alloc = allocMap.get(m.cc);
       const cf = cfMap.get(m.cc);
-      const change30d = old ? Number(m.preferredPc) - Number(old.preferredPc) : null;
+      const apnic = apnicCountrySummaries[m.cc];
+      const preferredPc = apnic?.preferredPc ?? Number(m.preferredPc ?? 0);
+      const capablePc = apnic?.capablePc ?? Number(m.capablePc ?? 0);
+      const change30d = old ? preferredPc - Number(old.preferredPc) : null;
 
       return {
         cc: m.cc,
         name: m.country?.name ?? m.cc,
         subRegion: m.country?.subRegion ?? 'Unknown',
         isTestbed: m.country?.isTestbed ?? false,
-        preferredPc: Number(m.preferredPc ?? 0),
-        capablePc: Number(m.capablePc ?? 0),
-        sampleN: m.sampleN ?? 0,
+        preferredPc,
+        capablePc,
+        sampleN: apnic?.sampleN ?? m.sampleN ?? 0,
+        weight: apnic?.weight ?? null,
+        weightedSamples: apnic?.weightedSamples ?? null,
         change30d,
         allocations32s: alloc ? Number(alloc.total32s) : 0,
         allocationCount: alloc?.allocationCount ?? 0,
@@ -73,12 +80,20 @@ export async function GET() {
     });
 
     // KPIs
-    const avgPreferred = countries?.length > 0
+    const countryAvgPreferred = countries?.length > 0
       ? countries.reduce((s: number, c: any) => s + (c?.preferredPc ?? 0), 0) / countries.length
       : 0;
-    const avgCapable = countries?.length > 0
+    const countryAvgCapable = countries?.length > 0
       ? countries.reduce((s: number, c: any) => s + (c?.capablePc ?? 0), 0) / countries.length
       : 0;
+    const [africaSeries, regionSummaries] = await Promise.all([
+      fetchApnicRegionSeries(),
+      fetchApnicRegionSummaries(),
+    ]);
+    const africaLatest = africaSeries[APNIC_AFRICA.name]?.at(-1);
+    const africaSummary = regionSummaries[APNIC_AFRICA.name];
+    const avgPreferred = africaSummary?.preferredPc ?? africaLatest?.preferredPc ?? countryAvgPreferred;
+    const avgCapable = africaSummary?.capablePc ?? africaLatest?.capablePc ?? countryAvgCapable;
     const above10 = countries.filter((c: any) => (c?.preferredPc ?? 0) >= 10).length;
     const avgChange30d = countries?.length > 0
       ? countries.reduce((s: number, c: any) => s + (c?.change30d ?? 0), 0) / countries.length

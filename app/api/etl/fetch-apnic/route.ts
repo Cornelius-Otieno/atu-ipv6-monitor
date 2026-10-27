@@ -17,8 +17,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
     let updated = 0;
     const errors: string[] = [];
 
@@ -37,17 +35,28 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // Last row = most recent data. Fields are nested under 'raw'
+        // APNIC's chart defaults to a 30-day average interval.
         const row = rows[rows.length - 1];
-        const raw = row?.raw ?? row;
-        const preferredPc = parseFloat(raw?.preferred_pc ?? raw?.pref_percent ?? '0') || 0;
-        const capablePc = parseFloat(raw?.capable_pc ?? raw?.able_percent ?? '0') || 0;
-        const sampleN = parseInt(raw?.seen ?? raw?.n ?? '0', 10) || 0;
+        const interval = row?.['30'];
+        if (!row?.date || !interval) {
+          errors.push(`${cc}: latest row has no date or 30-day values`);
+          continue;
+        }
+
+        const observationDate = new Date(`${row.date}T00:00:00.000Z`);
+        if (Number.isNaN(observationDate.getTime())) {
+          errors.push(`${cc}: invalid observation date ${row.date}`);
+          continue;
+        }
+        const preferredPc = Number(interval.preferred_pc ?? 0);
+        const capablePc = Number(interval.capable_pc ?? 0);
+        const sampleN = Math.round(Number(interval.seen ?? 0) * 30);
+        const dailySampleN = Math.round(Number(row.raw?.seen ?? 0));
 
         await prisma.countryMetric.upsert({
-          where: { date_cc: { date: today, cc } },
-          update: { preferredPc, capablePc, sampleN },
-          create: { date: today, cc, preferredPc, capablePc, sampleN, source: 'APNIC' },
+          where: { date_cc: { date: observationDate, cc } },
+          update: { preferredPc, capablePc, sampleN, dailySampleN },
+          create: { date: observationDate, cc, preferredPc, capablePc, sampleN, dailySampleN, source: 'APNIC' },
         });
         updated++;
       } catch (e: any) {

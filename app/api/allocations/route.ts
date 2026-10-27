@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { fetchApnicCountrySummaries } from '@/lib/apnic';
 
 export async function GET() {
   try {
@@ -22,10 +23,11 @@ export async function GET() {
       ? await prisma.countryMetric.findMany({ where: { date: latestDate.date } })
       : [];
     const metricsMap = new Map(metrics.map((m: any) => [m.cc, m]));
+    const apnicCountrySummaries = await fetchApnicCountrySummaries();
 
     const data = allocations.map((a: any) => {
       const metric = metricsMap.get(a.cc);
-      const preferredPc = Number(metric?.preferredPc ?? 0);
+      const preferredPc = apnicCountrySummaries[a.cc]?.preferredPc ?? Number(metric?.preferredPc ?? 0);
       return {
         cc: a.cc,
         name: a.country?.name ?? a.cc,
